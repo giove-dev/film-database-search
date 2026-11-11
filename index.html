@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineSearch & Watchlist</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Navbar -->
+  <nav class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center gap-2">
+      <i data-lucide="film" class="w-6 h-6 text-red-600"></i>
+      <span class="font-bold text-xl tracking-wide">CineSearch</span>
+    </div>
+    <div class="flex gap-2 bg-zinc-800 p-1 rounded-lg text-sm">
+      <button id="tab-search" onclick="switchTab('search')" class="px-4 py-1.5 rounded-md font-medium bg-red-600 text-white transition">
+        Cerca
+      </button>
+      <button id="tab-watchlist" onclick="switchTab('watchlist')" class="px-4 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white transition flex items-center gap-1.5">
+        Watchlist (<span id="watchlist-count">0</span>)
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-6">
+    
+    <!-- Sezione Ricerca -->
+    <section id="section-search" class="space-y-6">
+      <form id="search-form" class="flex gap-2 max-w-2xl mx-auto">
+        <input 
+          type="text" 
+          id="search-input" 
+          placeholder="Cerca un film (es. Batman, Inception)..." 
+          class="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-red-600 transition text-sm"
+          required
+        >
+        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium px-6 py-3 rounded-xl transition flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4"></i> Cerca
+        </button>
+      </form>
+
+      <div id="search-results" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <!-- I risultati della ricerca appariranno qui -->
+      </div>
+    </section>
+
+    <!-- Sezione Watchlist -->
+    <section id="section-watchlist" class="hidden space-y-6">
+      <h2 class="text-xl font-bold flex items-center gap-2">
+        <i data-lucide="bookmark" class="w-5 h-5 text-red-600"></i> La tua Watchlist
+      </h2>
+      <div id="watchlist-results" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <!-- I film salvati appariranno qui -->
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const API_KEY = 'tt3896198'; // Chiave demo OMDb API o libera
+    let watchlist = JSON.parse(localStorage.getItem('watchlist')) || [];
+
+    // Inizializzazione
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      updateWatchlistCount();
+    });
+
+    // Cambia scheda (Cerca / Watchlist)
+    function switchTab(tab) {
+      const searchSec = document.getElementById('section-search');
+      const watchlistSec = document.getElementById('section-watchlist');
+      const tabSearch = document.getElementById('tab-search');
+      const tabWatchlist = document.getElementById('tab-watchlist');
+
+      if (tab === 'search') {
+        searchSec.classList.remove('hidden');
+        watchlistSec.classList.add('hidden');
+        tabSearch.className = "px-4 py-1.5 rounded-md font-medium bg-red-600 text-white transition";
+        tabWatchlist.className = "px-4 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white transition flex items-center gap-1.5";
+      } else {
+        searchSec.classList.add('hidden');
+        watchlistSec.classList.remove('hidden');
+        tabWatchlist.className = "px-4 py-1.5 rounded-md font-medium bg-red-600 text-white transition flex items-center gap-1.5";
+        tabSearch.className = "px-4 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white transition";
+        renderWatchlist();
+      }
+    }
+
+    // Ricerca Film tramite API
+    document.getElementById('search-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+
+      const container = document.getElementById('search-results');
+      container.innerHTML = `<p class="col-span-full text-center text-zinc-500 py-12">Ricerca in corso...</p>`;
+
+      try {
+        const res = await fetch(`https://www.omdbapi.com/?apikey=trilogy&s=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (data.Response === "True") {
+          renderMovies(data.Search, container);
+        } else {
+          container.innerHTML = `<p class="col-span-full text-center text-zinc-500 py-12">Nessun film trovato per "${query}".</p>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<p class="col-span-full text-center text-red-500 py-12">Errore durante il caricamento dei dati.</p>`;
+      }
+    });
+
+    // Renderizza schede dei film
+    function renderMovies(movies, container, isWatchlistSection = false) {
+      container.innerHTML = movies.map(movie => {
+        const isSaved = watchlist.some(m => m.imdbID === movie.imdbID);
+        const poster = movie.Poster !== "N/A" ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Cover';
+        
+        return `
+          <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-md flex flex-col justify-between hover:border-zinc-700 transition">
+            <div>
+              <img src="${poster}" alt="${movie.Title}" class="w-full h-64 object-cover">
+              <div class="p-3">
+                <h3 class="font-bold text-sm truncate" title="${movie.Title}">${movie.Title}</h3>
+                <p class="text-xs text-zinc-500 mt-1">${movie.Year}</p>
+              </div>
+            </div>
+            <div class="p-3 pt-0">
+              <button 
+                onclick="toggleWatchlist('${movie.imdbID}', '${escapeQuotes(movie.Title)}', '${movie.Year}', '${poster}')"
+                class="w-full py-2 px-3 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  isSaved 
+                    ? 'bg-zinc-800 text-zinc-300 hover:bg-red-950 hover:text-red-400' 
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }"
+              >
+                ${isSaved ? 'Rimuovi' : 'Aggiungi'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    // Gestione Aggiunta/Rimozione Watchlist
+    function toggleWatchlist(imdbID, title, year, poster) {
+      const index = watchlist.findIndex(m => m.imdbID === imdbID);
+      
+      if (index > -1) {
+        watchlist.splice(index, 1);
+      } else {
+        watchlist.push({ imdbID, Title: title, Year: year, Poster: poster });
+      }
+
+      localStorage.setItem('watchlist', JSON.stringify(watchlist));
+      updateWatchlistCount();
+
+      // Aggiorna l'interfaccia corrente
+      if (!document.getElementById('section-watchlist').classList.contains('hidden')) {
+        renderWatchlist();
+      } else {
+        const query = document.getElementById('search-input').value.trim();
+        if (query) document.getElementById('search-form').dispatchEvent(new Event('submit'));
+      }
+    }
+
+    function renderWatchlist() {
+      const container = document.getElementById('watchlist-results');
+      if (watchlist.length === 0) {
+        container.innerHTML = `<p class="col-span-full text-center text-zinc-500 py-12">La tua watchlist è vuota.</p>`;
+      } else {
+        renderMovies(watchlist, container, true);
+      }
+    }
+
+    function updateWatchlistCount() {
+      document.getElementById('watchlist-count').innerText = watchlist.length;
+    }
+
+    function escapeQuotes(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
